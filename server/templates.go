@@ -18,6 +18,7 @@ const (
 	tmplPassword = "password.html"
 	tmplOOB      = "oob.html"
 	tmplError    = "error.html"
+	tmplDagaAuth = "dagaAuth.html"
 )
 
 var requiredTmpls = []string{
@@ -26,6 +27,7 @@ var requiredTmpls = []string{
 	tmplPassword,
 	tmplOOB,
 	tmplError,
+	tmplDagaAuth,
 }
 
 type templates struct {
@@ -34,6 +36,7 @@ type templates struct {
 	passwordTmpl *template.Template
 	oobTmpl      *template.Template
 	errorTmpl    *template.Template
+	dagaAuthTmpl *template.Template
 }
 
 type webConfig struct {
@@ -161,6 +164,7 @@ func loadTemplates(c webConfig, templatesDir string) (*templates, error) {
 		passwordTmpl: tmpls.Lookup(tmplPassword),
 		oobTmpl:      tmpls.Lookup(tmplOOB),
 		errorTmpl:    tmpls.Lookup(tmplError),
+		dagaAuthTmpl: tmpls.Lookup(tmplDagaAuth),
 	}, nil
 }
 
@@ -236,6 +240,14 @@ func (t *templates) err(w http.ResponseWriter, errCode int, errMsg string) error
 		return fmt.Errorf("Error rendering template %s: %s", t.errorTmpl.Name(), err)
 	}
 	return nil
+}
+
+func (t *templates) dagaAuth(w http.ResponseWriter, showBacklink bool) error {
+	// TODO see what additional parameters wanted
+	data := struct {
+		BackLink bool
+	}{showBacklink}
+	return renderTemplate(w, t.dagaAuthTmpl, data)
 }
 
 // small io.Writer utility to determine if executing the template wrote to the underlying response writer.

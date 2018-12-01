@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gorilla/websocket"
 	"net/http"
 	"net/url"
 	"path"
@@ -277,6 +278,9 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 		}
 		s.handleConnectorCallback(w, r)
 	})
+	// TODO, tmp solution/convenience, see where to put it later, create new server process elsewhere
+	r.HandleFunc("/daga_auth", s.handleDagaAuth)
+
 	// For easier connector-specific web server configuration, e.g. for the
 	// "authproxy" connector.
 	handleFunc("/callback/{connector}", s.handleConnectorCallback)
@@ -284,6 +288,30 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 	handleFunc("/healthz", s.handleHealth)
 	handlePrefix("/static", static)
 	handlePrefix("/theme", theme)
+	// quick test..TODO remove
+	r.HandleFunc("/ws", func (w http.ResponseWriter, r *http.Request) {
+		// TODO tls, + other security considerationshttps://devcenter.heroku.com/articles/websocket-security
+		s.logger.Info(r.URL)
+		// upgrade http to websocket
+		upgrader := websocket.Upgrader{
+			ReadBufferSize: 1024,
+			CheckOrigin: func(r *http.Request) bool {
+				origin := r.Header.Get("Origin")
+				s.logger.Infof("Origin: %s", origin)
+				return origin == "http://172.17.0.1:5556";
+			},
+		}
+		conn, err := upgrader.Upgrade(w, r, nil)
+
+		if err != nil {
+			s.logger.Info(err)
+			return
+		}
+
+		tp, buffer, err := conn.ReadMessage()
+		s.logger.Println(tp, buffer, err)
+		
+	})
 	s.mux = r
 
 	s.startKeyRotation(ctx, rotationStrategy, now)

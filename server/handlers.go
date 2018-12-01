@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	jose "gopkg.in/square/go-jose.v2"
+	"gopkg.in/square/go-jose.v2"
 
 	"github.com/dexidp/dex/connector"
 	"github.com/dexidp/dex/server/internal"
@@ -205,7 +205,7 @@ func (s *Server) handleConnectorLogin(w http.ResponseWriter, r *http.Request) {
 	connID := mux.Vars(r)["connector"]
 	conn, err := s.getConnector(connID)
 	if err != nil {
-		s.logger.Errorf("Failed to create authorization request: %v", err)
+		s.logger.Errorf("Failed to create authorization request, connID=%v: %v", connID, err)
 		s.renderError(w, http.StatusBadRequest, "Requested resource does not exist")
 		return
 	}
@@ -214,7 +214,7 @@ func (s *Server) handleConnectorLogin(w http.ResponseWriter, r *http.Request) {
 
 	authReq, err := s.storage.GetAuthRequest(authReqID)
 	if err != nil {
-		s.logger.Errorf("Failed to get auth request: %v", err)
+		s.logger.Errorf("Failed to get auth request, authReqID=%v: %v", authReqID, err)
 		if err == storage.ErrNotFound {
 			s.renderError(w, http.StatusBadRequest, "Login session expired.")
 		} else {
@@ -282,6 +282,8 @@ func (s *Server) handleConnectorLogin(w http.ResponseWriter, r *http.Request) {
 				</script>
 			  </body>
 			  </html>`, action, value, authReqID)
+		// QUESTION: my new daga connector is more like a new kind of connector, I only reuse callbackconnector flow for convenience but maybe better to treat it separately here
+		// But I might choose to implement later a daga auth endpoint elsewhere (that offer the WEBUI to the daga service) that will speak OAuth => instead of adding new things in dex
 		default:
 			s.renderError(w, http.StatusBadRequest, "Requested resource does not exist.")
 		}
@@ -318,6 +320,25 @@ func (s *Server) handleConnectorLogin(w http.ResponseWriter, r *http.Request) {
 	default:
 		s.renderError(w, http.StatusBadRequest, "Unsupported request method.")
 	}
+}
+
+// TODO if later we move daga auth elsewhere remove this
+func (s *Server) handleDagaAuth(w http.ResponseWriter, r *http.Request) {
+
+	showBacklink := len(s.connectors) > 1
+
+	switch r.Method {
+	case "GET":
+		// serve "auth" page that let user select a context and click to create and send the daga auth request to the daga cothority
+		if err := s.templates.dagaAuth(w, showBacklink); err != nil {
+			s.logger.Errorf("Server template error: %v", err)
+		}
+	case "POST":
+		// TODO forward the daga auth. request to the daga service/cothority
+
+	//	s.sendCodeResponse(w, r, authReq)
+	}
+
 }
 
 func (s *Server) handleConnectorCallback(w http.ResponseWriter, r *http.Request) {
