@@ -1,5 +1,5 @@
 PROJ=dex
-ORG_PATH=github.com/sarkortrantor
+ORG_PATH=github.com/dexidp
 REPO_PATH=$(ORG_PATH)/$(PROJ)
 export PATH := $(PWD)/bin:$(PATH)
 
