@@ -242,11 +242,12 @@ func (t *templates) err(w http.ResponseWriter, errCode int, errMsg string) error
 	return nil
 }
 
-func (t *templates) dagaAuth(w http.ResponseWriter, showBacklink bool) error {
+func (t *templates) dagaAuth(w http.ResponseWriter, showBacklink bool, authReqID string) error {
 	// TODO see what additional parameters wanted
 	data := struct {
 		BackLink bool
-	}{showBacklink}
+		AuthReqID string
+	}{showBacklink, authReqID}
 	return renderTemplate(w, t.dagaAuthTmpl, data)
 }
 

@@ -325,18 +325,23 @@ func (s *Server) handleConnectorLogin(w http.ResponseWriter, r *http.Request) {
 // TODO if later we move daga auth elsewhere remove this
 func (s *Server) handleDagaAuth(w http.ResponseWriter, r *http.Request) {
 
+	authReq, err := s.storage.GetAuthRequest(r.FormValue("state"))
+	if err != nil {
+		s.logger.Errorf("Failed to get auth request: %v", err)
+		s.renderError(w, http.StatusInternalServerError, "Database error.")
+		return
+	}
 	showBacklink := len(s.connectors) > 1
 
 	switch r.Method {
 	case "GET":
-		// serve "auth" page that let user select a context and click to create and send the daga auth request to the daga cothority
-		if err := s.templates.dagaAuth(w, showBacklink); err != nil {
+		// serve "auth" page that let user select a context and generate its auth. message
+		if err := s.templates.dagaAuth(w, showBacklink, authReq.ID); err != nil {
 			s.logger.Errorf("Server template error: %v", err)
 		}
 	case "POST":
 		// TODO forward the daga auth. request to the daga service/cothority
-
-	//	s.sendCodeResponse(w, r, authReq)
+		s.logger.Info(r)
 	}
 
 }
