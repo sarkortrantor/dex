@@ -4,6 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/dedis/onet/network"
+	"github.com/dedis/student_18_daga/dagacothority"
+	"github.com/dedis/student_18_daga/sign/daga"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"path"
@@ -340,10 +344,76 @@ func (s *Server) handleDagaAuth(w http.ResponseWriter, r *http.Request) {
 			s.logger.Errorf("Server template error: %v", err)
 		}
 	case "POST":
-		// TODO forward the daga auth. request to the daga service/cothority
-		s.logger.Info(r)
-	}
+		//dump := func(r *http.Request) {
+		//	output, err := httputil.DumpRequest(r, true)
+		//	if err != nil {
+		//		fmt.Println("Error dumping request:", err)
+		//		return
+		//	}
+		//	fmt.Println(string(output))
+		//}
+		//dump(r)
 
+		// grab daga auth. msg from req. body
+		authMsgProto, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			s.renderError(w, http.StatusInternalServerError, "failed to read body: " + err.Error())
+		}
+		// decode it
+		network.RegisterMessage(dagacothority.Auth{})
+		suite := daga.NewSuiteEC()
+		if _, authMsgPtr, err := network.Unmarshal(authMsgProto, suite); err != nil {
+			s.renderError(w, http.StatusInternalServerError, "failed to decode body: " + err.Error())
+		} else if authMsg, ok := authMsgPtr.(*dagacothority.Auth); !ok {
+			s.renderError(w, http.StatusInternalServerError, "failed to decode body: wrong type, expected dagacothority.Auth")
+		} else {
+			// send/forward it to daga cothority
+			client, err := dagacothority.NewClient(0, nil)
+			if err != nil {
+				s.renderError(w, http.StatusInternalServerError, err.Error())
+			}
+			reply := dagacothority.AuthReply{}
+			if err := client.Onet.SendProtobuf(authMsg.Context.Roster.RandomServerIdentity(), authMsg, &reply); err != nil {
+				s.renderError(w, http.StatusInternalServerError, err.Error())
+			}
+			// decode reply
+			serverMsg, context := reply.NetDecode()
+			if err != nil {
+				s.renderError(w, http.StatusInternalServerError, err.Error())
+			}
+			// extract final linkage tag
+			if Tf, err := daga.GetFinalLinkageTag(suite, context, *serverMsg); err != nil {
+				s.renderError(w, http.StatusInternalServerError, err.Error())
+			} else {
+				// store tag in request state, to later log client in
+				s.logger.Infof("linkage tag: %v", Tf)
+
+				identity := connector.Identity{ UserID: Tf.String() }
+				connector, err := s.getConnector(authReq.ConnectorID)
+				if err != nil {
+					s.renderError(w, http.StatusInternalServerError, err.Error())
+				}
+				redirectURL, err := s.finalizeLogin(identity, authReq, connector)
+				if err != nil {
+					s.logger.Errorf("Failed to finalize login: %v", err)
+					s.renderError(w, http.StatusInternalServerError, "Login error.")
+					return
+				}
+
+				// "custom ajax redirect"
+				data, err := json.Marshal(struct {
+					Redirect string `json:"redirect"`
+				}{Redirect: redirectURL})
+				if err != nil {
+					s.renderError(w, http.StatusInternalServerError, err.Error())
+				}
+				//s.logger.Info(data, redirectURL)
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+				w.Write(data)
+			}
+		}
+	}
 }
 
 func (s *Server) handleConnectorCallback(w http.ResponseWriter, r *http.Request) {
