@@ -357,29 +357,41 @@ func (s *Server) handleDagaAuth(w http.ResponseWriter, r *http.Request) {
 		// grab daga auth. msg from req. body
 		authMsgProto, err := ioutil.ReadAll(r.Body)
 		if err != nil {
+			s.logger.Error(err)
 			s.renderError(w, http.StatusInternalServerError, "failed to read body: " + err.Error())
+			return
 		}
 		// decode it
 		network.RegisterMessage(dagacothority.Auth{})
 		suite := daga.NewSuiteEC()
 		if _, authMsgPtr, err := network.Unmarshal(authMsgProto, suite); err != nil {
+			s.logger.Error(err)
 			s.renderError(w, http.StatusInternalServerError, "failed to decode body: " + err.Error())
+			return
 		} else if authMsg, ok := authMsgPtr.(*dagacothority.Auth); !ok {
+			s.logger.Error(err)
 			s.renderError(w, http.StatusInternalServerError, "failed to decode body: wrong type, expected dagacothority.Auth")
+			return
 		} else {
 			// send/forward it to daga cothority
 			client, err := dagacothority.NewClient(0, nil)
 			if err != nil {
+				s.logger.Error(err)
 				s.renderError(w, http.StatusInternalServerError, err.Error())
+				return
 			}
 			reply := dagacothority.AuthReply{}
 			if err := client.Onet.SendProtobuf(authMsg.Context.Roster.RandomServerIdentity(), authMsg, &reply); err != nil {
+				s.logger.Error(err)
 				s.renderError(w, http.StatusInternalServerError, err.Error())
+				return
 			}
 			// decode reply
 			serverMsg, context := reply.NetDecode()
 			if err != nil {
+				s.logger.Error(err)
 				s.renderError(w, http.StatusInternalServerError, err.Error())
+				return
 			}
 			// extract final linkage tag
 			if Tf, err := daga.GetFinalLinkageTag(suite, context, *serverMsg); err != nil {
@@ -391,7 +403,9 @@ func (s *Server) handleDagaAuth(w http.ResponseWriter, r *http.Request) {
 				identity := connector.Identity{ UserID: Tf.String() }
 				connector, err := s.getConnector(authReq.ConnectorID)
 				if err != nil {
+					s.logger.Error(err)
 					s.renderError(w, http.StatusInternalServerError, err.Error())
+					return
 				}
 				redirectURL, err := s.finalizeLogin(identity, authReq, connector)
 				if err != nil {
@@ -405,7 +419,9 @@ func (s *Server) handleDagaAuth(w http.ResponseWriter, r *http.Request) {
 					Redirect string `json:"redirect"`
 				}{Redirect: redirectURL})
 				if err != nil {
+					s.logger.Error(err)
 					s.renderError(w, http.StatusInternalServerError, err.Error())
+					return
 				}
 				//s.logger.Info(data, redirectURL)
 				w.Header().Set("Content-Type", "application/json")
